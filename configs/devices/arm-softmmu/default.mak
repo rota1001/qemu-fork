@@ -1,4 +1,8 @@
 # Default configuration for arm-softmmu
+CONFIG_ARM_V7M=y
+CONFIG_STM32F405_SOC=y
+CONFIG_STM32F429DISCOVERY=y
+CONFIG_OLIMEX_STM32_H405=y
 
 # Uncomment the following lines to disable these optional devices:
 # CONFIG_I2C_DEVICES=n

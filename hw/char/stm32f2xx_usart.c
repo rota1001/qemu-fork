@@ -24,6 +24,7 @@
 
 #include "qemu/osdep.h"
 #include "hw/char/stm32f2xx_usart.h"
+#include "hw/dma/stm32f2xx_dma.h"
 #include "hw/core/irq.h"
 #include "hw/core/qdev-properties.h"
 #include "hw/core/qdev-properties-system.h"
@@ -35,6 +36,11 @@
 static int stm32f2xx_usart_can_receive(void *opaque)
 {
     STM32F2XXUsartState *s = opaque;
+
+    if (s->usart_cr3 & USART_CR3_DMAR) {
+        /* DMA RX mode: always accept, bytes go directly to DMA buffer */
+        return 1;
+    }
 
     if (!(s->usart_sr & USART_SR_RXNE)) {
         return 1;
@@ -62,6 +68,30 @@ static void stm32f2xx_usart_receive(void *opaque, const uint8_t *buf, int size)
     if (!(s->usart_cr1 & USART_CR1_UE && s->usart_cr1 & USART_CR1_RE)) {
         /* USART not enabled - drop the chars */
         trace_stm32f2xx_usart_drop(d->id);
+        return;
+    }
+
+    if ((s->usart_cr3 & USART_CR3_DMAR) && s->dma) {
+        hwaddr dr_addr = s->mmio_addr + USART_DR;
+        for (int i = 0; i < size; i++) {
+            stm32f2xx_dma_receive_byte(s->dma, dr_addr, buf[i]);
+        }
+        /*
+         * On real STM32F4, RXNE is set briefly before the DMA clears it
+         * by reading DR.  The kernel enables RXNEIE even with DMAR, and
+         * the ISR unconditionally drains the DMA buffer at line 903-911
+         * whenever it fires with DMA started.  We need to trigger the
+         * USART IRQ so the kernel processes the byte promptly.
+         *
+         * Pulse the IRQ line: set RXNE to trigger the interrupt, then
+         * clear it (simulating the DMA reading DR).  The NVIC latches
+         * the pending bit on the rising edge.
+         */
+        s->usart_sr |= USART_SR_RXNE;
+        stm32f2xx_update_irq(s);
+        s->usart_sr &= ~USART_SR_RXNE;
+        stm32f2xx_update_irq(s);
+        trace_stm32f2xx_usart_receive(d->id, *buf);
         return;
     }
 

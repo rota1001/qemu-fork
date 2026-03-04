@@ -36,6 +36,9 @@ static void stm32_rcc_reset(DeviceState *dev)
     for (int i = 0; i < STM32_RCC_NREGS; i++) {
         s->regs[i] = 0;
     }
+
+    /* HSIRDY (bit 1), HSERDY (bit 17), PLLRDY (bit 25) after reset */
+    s->regs[STM32_RCC_CR] |= (1 << 1) | (1 << 17) | (1 << 25);
 }
 
 static uint64_t stm32_rcc_read(void *opaque, hwaddr addr, unsigned int size)
@@ -69,6 +72,29 @@ static void stm32_rcc_write(void *opaque, hwaddr addr,
     }
 
     switch (addr) {
+    case STM32_RCC_CR:
+        /*
+         * Auto-set oscillator/PLL ready bits when the corresponding
+         * enable bits are written.  The Linux clock driver polls these
+         * ready bits in tight loops (up to 5 s for LSI/LSE via rgclk_enable
+         * and 10 000 iterations for PLLs); if QEMU never asserts them the
+         * driver spins for the full timeout, fragmenting the buddy
+         * allocator and causing OOM for later user-space allocations.
+         *
+         * Bit mapping (enable → ready):
+         *   0 HSION   →  1 HSIRDY
+         *  16 HSEON   → 17 HSERDY
+         *  24 PLLON   → 25 PLLRDY
+         *  26 PLLI2SON→ 27 PLLI2SRDY
+         *  28 PLLSAION→ 29 PLLSAIRDY
+         */
+        s->regs[addr / 4] = value;
+        if (value & (1u << 0))  s->regs[addr / 4] |= (1u << 1);
+        if (value & (1u << 16)) s->regs[addr / 4] |= (1u << 17);
+        if (value & (1u << 24)) s->regs[addr / 4] |= (1u << 25);
+        if (value & (1u << 26)) s->regs[addr / 4] |= (1u << 27);
+        if (value & (1u << 28)) s->regs[addr / 4] |= (1u << 29);
+        return;
     case STM32_RCC_AHB1_RSTR...STM32_RCC_APB2_RSTR:
         prev_value = s->regs[addr / 4];
         s->regs[addr / 4] = value;
@@ -94,6 +120,25 @@ static void stm32_rcc_write(void *opaque, hwaddr addr,
                 qemu_set_irq(s->enable_irq[irq_offset + i], new_value);
             }
         }
+        return;
+    case STM32_RCC_BDCR:
+        /*
+         * Auto-set LSERDY (bit 1) when LSEON (bit 0) is written.
+         * The clock driver busy-waits up to 5 s for this bit.
+         */
+        s->regs[addr / 4] = value;
+        if (value & (1u << 0)) s->regs[addr / 4] |= (1u << 1);
+        return;
+    case STM32_RCC_CSR:
+        /*
+         * Auto-set LSIRDY (bit 1) when LSION (bit 0) is written.
+         * The clock driver busy-waits up to 5 s for this bit.
+         */
+        s->regs[addr / 4] = value;
+        if (value & (1u << 0)) s->regs[addr / 4] |= (1u << 1);
+        return;
+    case STM32_RCC_CFGR:
+        s->regs[addr / 4] = (value & ~0xC) | ((value & 3) << 2);
         return;
     default:
         qemu_log_mask(

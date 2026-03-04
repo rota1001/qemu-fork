@@ -55,6 +55,8 @@
 #define USART_CR1_TE     (1 << 3)
 #define USART_CR1_RE     (1 << 2)
 
+#define USART_CR3_DMAR   (1 << 6)
+
 #define TYPE_STM32F2XX_USART "stm32f2xx-usart"
 OBJECT_DECLARE_SIMPLE_TYPE(STM32F2XXUsartState, STM32F2XX_USART)
 
@@ -75,5 +77,10 @@ struct STM32F2XXUsartState {
 
     CharFrontend chr;
     qemu_irq irq;
+
+    /* Link to DMA controller for DMA RX/TX */
+    struct STM32F2XXDMAState *dma;
+    /* Base address of this USART (for DMA PAR matching) */
+    uint32_t mmio_addr;
 };
 #endif /* HW_STM32F2XX_USART_H */

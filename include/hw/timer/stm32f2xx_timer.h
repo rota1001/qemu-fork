@@ -59,7 +59,10 @@
 #define TIM_CCMR1_OC2M0 (1 << 12)
 #define TIM_CCMR1_OC2PE (1 << 11)
 
-#define TIM_DIER_UIE  1
+#define TIM_DIER_UIE   1
+#define TIM_DIER_CC1IE (1 << 1)
+
+#define TIM_SR_CC1IF  (1 << 1)
 
 #define TYPE_STM32F2XX_TIMER "stm32f2xx-timer"
 typedef struct STM32F2XXTimerState STM32F2XXTimerState;
@@ -73,6 +76,7 @@ struct STM32F2XXTimerState {
     /* <public> */
     MemoryRegion iomem;
     QEMUTimer *timer;
+    QEMUTimer *cc1_timer;
     qemu_irq irq;
 
     int64_t tick_offset;

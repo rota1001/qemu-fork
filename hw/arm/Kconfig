@@ -142,6 +142,13 @@ config NETDUINOPLUS2
     depends on TCG && ARM
     select STM32F405_SOC
 
+config STM32F429DISCOVERY
+    bool
+    default y
+    depends on TCG && ARM
+    select STM32F405_SOC
+    select GENERIC_LOADER
+
 config OLIMEX_STM32_H405
     bool
     default y
@@ -403,8 +410,15 @@ config STM32F405_SOC
     select ARM_V7M
     select OR_IRQ
     select STM32_RCC
+    select STM32_FMC
+    select STM32F2XX_ADC
+    select STM32F2XX_DMA
+    select STM32F2XX_SPI
+    select STM32F2XX_TIMER
+    select STM32F2XX_USART
     select STM32F4XX_SYSCFG
     select STM32F4XX_EXTI
+    select UNIMP
 
 config B_L475E_IOT01A
     bool
